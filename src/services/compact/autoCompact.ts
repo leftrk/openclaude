@@ -108,6 +108,16 @@ export const MANUAL_COMPACT_BUFFER_TOKENS = 3_000
 
 export const AUTOCOMPACT_FAILURE_COOLDOWN_MS = 5 * 60 * 1000
 
+// Minimum token pressure (as a fraction of the effective context window)
+// required before the *default* message-count threshold may force compaction.
+// A raw message count is not by itself evidence of context pressure for
+// large-window models — 200 messages can be ~10% of a 1M window, and forced
+// compaction destroys state the window could have kept. Set to 0.8 so the
+// message-count force only fires once the session is genuinely deep into the
+// window (the regular token threshold still catches growth at window−30k).
+// Explicit user/legacy thresholds and the 1000-message hard cap bypass this gate.
+export const MESSAGE_COUNT_FORCE_MIN_WINDOW_FRACTION = 0.8
+
 // Minimum cooldown override allowed via OPENCLAUDE_AUTOCOMPACT_FAILURE_COOLDOWN_MS.
 // Values below this floor are rejected (function falls back to the default) so
 // misconfiguration cannot effectively disable the circuit breaker.

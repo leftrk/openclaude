@@ -368,16 +368,30 @@ test('default active-message hard cap forces compaction', async () => {
   expect(seenTracking[0]?.forceReason).toBe('message-count')
 })
 
-test('unset message threshold forces compaction at the 200-message default', async () => {
+test('unset message threshold does not force compaction without token pressure', async () => {
   const { terminal, callModel, seenTracking } =
     await runMessageCountHardCapQuery(manySmallMessages(201))
+
+  expect(terminal.reason).toBe('max_turns')
+  expect(callModel).toHaveBeenCalledTimes(1)
+  expect(seenTracking[0]?.forceReason).toBeUndefined()
+})
+
+test('unset message threshold forces compaction at 200 messages under token pressure', async () => {
+  // The 200-message default is gated on token pressure (>=80% of the
+  // effective window). The test window is 200k (effective ~180k), so a
+  // ~150k-token message puts the 201-message history over the gate.
+  const messages = [...manySmallMessages(200), userMessage('x'.repeat(600_000))]
+
+  const { terminal, callModel, seenTracking } =
+    await runMessageCountHardCapQuery(messages)
 
   expect(terminal.reason).toBe('max_turns')
   expect(callModel).toHaveBeenCalledTimes(1)
   expect(seenTracking[0]?.forceReason).toBe('message-count')
 })
 
-test('invalid legacy message threshold keeps the 200-message default', async () => {
+test('invalid legacy message threshold falls back to the gated 200-message default', async () => {
   process.env.OPENCLAUDE_MAX_ACTIVE_MESSAGES = 'not-a-number'
 
   const { terminal, callModel, seenTracking } =
@@ -385,7 +399,7 @@ test('invalid legacy message threshold keeps the 200-message default', async () 
 
   expect(terminal.reason).toBe('max_turns')
   expect(callModel).toHaveBeenCalledTimes(1)
-  expect(seenTracking[0]?.forceReason).toBe('message-count')
+  expect(seenTracking[0]?.forceReason).toBeUndefined()
 })
 
 test('disabled auto-compact leaves the default message threshold inactive', async () => {
