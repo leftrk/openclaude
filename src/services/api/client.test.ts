@@ -712,6 +712,109 @@ test('env-only MiniMax fallback replaces stale non-MiniMax model env', async () 
   expect(process.env.ANTHROPIC_API_KEY).toBe('minimax-test-key')
 })
 
+test('env-only MiniMax does not hijack an explicitly configured third-party model', async () => {
+  let capturedUrl: string | undefined
+
+  clearEnvForMiniMaxOnlyTest()
+  process.env.MINIMAX_API_KEY = 'minimax-test-key'
+
+  globalThis.fetch = (async (input, init) => {
+    capturedUrl =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url
+
+    return new Response(
+      JSON.stringify({
+        id: 'msg-third-party',
+        type: 'message',
+        role: 'assistant',
+        model: 'deepseek-v4-flash',
+        content: [{ type: 'text', text: 'third-party ok' }],
+        usage: { input_tokens: 8, output_tokens: 3, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        stop_reason: 'end_turn',
+      }),
+      { headers: { 'Content-Type': 'application/json' } },
+    )
+  }) as FetchType
+
+  const client = (await getAnthropicClient({
+    maxRetries: 0,
+    model: 'deepseek-v4-flash[1m]',
+  })) as unknown as ShimClient
+
+  await client.beta.messages.create({
+    model: 'deepseek-v4-flash[1m]',
+    system: 'test system',
+    messages: [{ role: 'user', content: 'hello' }],
+    max_tokens: 64,
+    stream: false,
+  })
+
+  // An ambient MINIMAX_API_KEY must not rewrite the Anthropic env or redirect
+  // the request to MiniMax when the effective model is an explicitly
+  // configured third-party model (e.g. settings.json "model").
+  expect(capturedUrl).not.toContain('minimax')
+  expect(process.env.ANTHROPIC_BASE_URL).toBeUndefined()
+  expect(process.env.ANTHROPIC_API_KEY).toBe('must-not-forward')
+  expect(process.env.ANTHROPIC_MODEL).toBeUndefined()
+})
+
+test('env-only MiniMax still hijacks a Claude-family default model', async () => {
+  let capturedUrl: string | undefined
+  let capturedHeaders: Headers | undefined
+
+  clearEnvForMiniMaxOnlyTest()
+  process.env.MINIMAX_API_KEY = 'minimax-test-key'
+
+  globalThis.fetch = (async (input, init) => {
+    capturedUrl =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url
+    capturedHeaders = new Headers(init?.headers)
+
+    return new Response(
+      JSON.stringify({
+        id: 'msg-minimax-default-model',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-sonnet-4-6[1m]',
+        content: [{ type: 'text', text: 'minimax default ok' }],
+        usage: { input_tokens: 8, output_tokens: 3, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        stop_reason: 'end_turn',
+      }),
+      { headers: { 'Content-Type': 'application/json' } },
+    )
+  }) as FetchType
+
+  // Regression protection: legitimate zero-config MiniMax (bare
+  // MINIMAX_API_KEY, model unset or a Claude-family default — here with the
+  // [1m] tag variant) keeps routing to MiniMax; applyMiniMaxEnvOnlyDefaults
+  // rewrites the model to the MiniMax default.
+  const client = (await getAnthropicClient({
+    maxRetries: 0,
+    model: 'claude-sonnet-4-6[1m]',
+  })) as unknown as ShimClient
+
+  await client.beta.messages.create({
+    model: 'claude-sonnet-4-6[1m]',
+    system: 'test system',
+    messages: [{ role: 'user', content: 'hello' }],
+    max_tokens: 64,
+    stream: false,
+  })
+
+  expect(capturedUrl).toBe('https://api.minimax.io/anthropic/v1/messages?beta=true')
+  expect(capturedHeaders?.get('x-api-key')).toBe('minimax-test-key')
+  expect(process.env.ANTHROPIC_BASE_URL).toBe('https://api.minimax.io/anthropic')
+  expect(process.env.ANTHROPIC_API_KEY).toBe('minimax-test-key')
+})
+
 test('env-only MiniMax fallback does not override explicit OpenAI credentials', async () => {
   delete process.env.CLAUDE_CODE_USE_GEMINI
   delete process.env.GEMINI_API_KEY

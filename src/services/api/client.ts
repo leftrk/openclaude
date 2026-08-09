@@ -135,6 +135,28 @@ function isMiniMaxModelName(value: string | undefined): boolean {
   )
 }
 
+/**
+ * Matches the Claude-family default model names (claude-*, opus*, sonnet*,
+ * haiku*), tolerating the client-side `[1m]` tag and any `?` query suffix
+ * (e.g. `claude-sonnet-4-6[1m]`, `opus?thinking=adaptive`). Used to tell a
+ * stock default model apart from an explicitly configured third-party model.
+ */
+function isClaudeFamilyModelName(value: string | undefined): boolean {
+  const normalized = value
+    ?.trim()
+    .split('?', 1)[0]
+    ?.trim()
+    .toLowerCase()
+    .replace(/\[1m]$/, '')
+  return Boolean(
+    normalized &&
+      (normalized.startsWith('claude') ||
+        normalized.startsWith('opus') ||
+        normalized.startsWith('sonnet') ||
+        normalized.startsWith('haiku')),
+  )
+}
+
 function hasMiniMaxModelIntent(model: string | undefined): boolean {
   return (
     isMiniMaxModelName(model) ||
@@ -159,6 +181,24 @@ function shouldUseMiniMaxEnvOnlyProvider(
       process.env.ANTHROPIC_API_KEY?.trim())
 
   if (!hasMiniMaxCredential) {
+    return false
+  }
+
+  // An explicitly configured third-party model (e.g. settings.json
+  // "model": "deepseek-v4-flash") outranks the env-only MiniMax guess: an
+  // ambient MINIMAX_API_KEY in the shell is a credential, not routing intent.
+  // MiniMax models and Claude-family defaults (claude-*/opus*/sonnet*/haiku*)
+  // keep the zero-config MiniMax behavior — applyMiniMaxEnvOnlyDefaults
+  // rewrites those to the MiniMax default model. The other env-only vendors
+  // (xai, venice, xiaomi-mimo, nearai, fireworks, longcat, aimlapi) have the
+  // same ambient-key blind spot; they are handled at the profile-application
+  // layer (see hasCompleteProviderSelection in utils/providerProfiles.ts)
+  // rather than per-vendor guards here.
+  if (
+    model &&
+    !isMiniMaxModelName(model) &&
+    !isClaudeFamilyModelName(model)
+  ) {
     return false
   }
 
