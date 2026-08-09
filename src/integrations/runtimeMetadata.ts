@@ -465,7 +465,14 @@ function findCachedCatalogEntryForApiName(
     ),
     headers: parseCustomHeadersEnv(runtimeEnv.ANTHROPIC_CUSTOM_HEADERS),
   })
-  const cached = getCachedModelsSync(cacheKey, getDiscoveryCacheTtlMs(routeId))
+  const cacheTtlMs = getDiscoveryCacheTtlMs(routeId)
+  // On a TTL miss, fall back to the stale entry. Stale discovery data is a
+  // far better basis for compaction budgets than the blind
+  // OPENAI_FALLBACK_CONTEXT_WINDOW default — otherwise a TTL lapse silently
+  // shrinks e.g. a 1M-context model to 128k and fires premature auto-compacts.
+  const cached =
+    getCachedModelsSync(cacheKey, cacheTtlMs) ??
+    getCachedModelsSync(cacheKey, cacheTtlMs, { includeStale: true })
 
   return (
     cached?.models.find(entry =>
