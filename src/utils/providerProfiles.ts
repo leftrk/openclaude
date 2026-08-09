@@ -577,11 +577,26 @@ function hasProviderSelectionFlags(
  * startup. The weaker `hasProviderSelectionFlags` is still used for the
  * anthropic-profile conflict check (any flag is a conflict for
  * first-party anthropic) and for alignment fingerprinting.
+ *
+ * Pass `envOnlyRoutesRequireRoutingIntent` when a saved active profile
+ * exists: a bare ambient credential key in the shell (MINIMAX_API_KEY,
+ * XAI_API_KEY, …) is not routing intent and must not outrank the profile
+ * the user explicitly selected in-app — otherwise merely exporting
+ * MINIMAX_API_KEY silently reroutes every request to MiniMax, ignoring the
+ * profile. A credential key PLUS a routing hint (vendor base URL or model
+ * env) still counts as an explicit env-only selection.
  */
 function hasCompleteProviderSelection(
   processEnv: NodeJS.ProcessEnv = process.env,
+  options?: { envOnlyRoutesRequireRoutingIntent?: boolean },
 ): boolean {
-  if (resolveEnvOnlyProviderRouteId(processEnv) !== null) return true
+  if (
+    resolveEnvOnlyProviderRouteId(processEnv) !== null &&
+    (!options?.envOnlyRoutesRequireRoutingIntent ||
+      hasEnvOnlyRoutingIntent(processEnv))
+  ) {
+    return true
+  }
   if (
     trimOrUndefined(processEnv.ANTHROPIC_BASE_URL) !== undefined &&
     trimOrUndefined(processEnv.ANTHROPIC_MODEL) !== undefined &&
@@ -625,6 +640,22 @@ function hasCompleteProviderSelection(
   // Bedrock / Vertex / Foundry signal cloud-provider routing in env; treat
   // the flag alone as complete (these paths rely on ambient AWS/GCP creds).
   return true
+}
+
+/**
+ * Distinguishes a deliberate env-only provider setup from an ambient
+ * credential leak: a bare MINIMAX_API_KEY/XAI_API_KEY/etc. in the shell is
+ * just a key, but pairing it with a routing hint (a base URL or model env
+ * var) shows the user actually pointed the session at that provider.
+ */
+function hasEnvOnlyRoutingIntent(processEnv: NodeJS.ProcessEnv): boolean {
+  return (
+    trimOrUndefined(processEnv.ANTHROPIC_BASE_URL) !== undefined ||
+    trimOrUndefined(processEnv.OPENAI_BASE_URL) !== undefined ||
+    trimOrUndefined(processEnv.OPENAI_API_BASE) !== undefined ||
+    trimOrUndefined(processEnv.OPENAI_MODEL) !== undefined ||
+    trimOrUndefined(processEnv.ANTHROPIC_MODEL) !== undefined
+  )
 }
 
 function hasConflictingProviderFlagsForProfile(
@@ -1213,7 +1244,7 @@ export function applyActiveProviderProfileFromConfig(
     processEnv[PROFILE_ENV_APPLIED_FLAG] === '1' &&
     trimOrUndefined(processEnv[PROFILE_ENV_APPLIED_ID]) === activeProfile.id
 
-  if (!options?.force && (hasCompleteProviderSelection(processEnv) || processEnv[PROFILE_ENV_APPLIED_FLAG] === '1')) {
+  if (!options?.force && (hasCompleteProviderSelection(processEnv, { envOnlyRoutesRequireRoutingIntent: true }) || processEnv[PROFILE_ENV_APPLIED_FLAG] === '1')) {
     // Respect explicit startup provider intent. Auto-heal only when this
     // exact active profile previously applied the current env.
     // NOTE: we gate on hasCompleteProviderSelection (flag + concrete config)
@@ -1221,7 +1252,9 @@ export function applyActiveProviderProfileFromConfig(
     // with no BASE_URL/MODEL is almost always a stale shell export, not
     // intent — respecting it would skip the saved profile and fall through
     // to hardcoded provider defaults, which surfaces as "my saved provider
-    // isn't being picked up at startup".
+    // isn't being picked up at startup". A bare env-only credential key
+    // (MINIMAX_API_KEY etc. with no base-URL/model routing hint) is likewise
+    // ambient, not intent: the saved active profile wins over it.
     if (!isCurrentEnvProfileManaged) {
       return undefined
     }

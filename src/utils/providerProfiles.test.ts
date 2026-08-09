@@ -2232,6 +2232,56 @@ describe('applyActiveProviderProfileFromConfig', () => {
     expect(process.env.OPENAI_BASE_URL).toBeUndefined()
   })
 
+  test('applies saved profile over an ambient env-only MiniMax credential', async () => {
+    // A bare MINIMAX_API_KEY in the shell (no base-URL/model routing hint) is
+    // an ambient credential, not routing intent: the explicitly saved active
+    // profile must win. Regression test for the bug where merely exporting
+    // MINIMAX_API_KEY rerouted every request to MiniMax, ignoring the saved
+    // profile and its configured model.
+    const { applyActiveProviderProfileFromConfig } =
+      await importFreshProviderProfileModules()
+    process.env.MINIMAX_API_KEY = 'minimax-live-key'
+
+    const applied = applyActiveProviderProfileFromConfig({
+      providerProfiles: [
+        buildProfile({
+          id: 'saved_openai',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'gpt-4o',
+        }),
+      ],
+      activeProviderProfileId: 'saved_openai',
+    } as any)
+
+    expect(applied?.id).toBe('saved_openai')
+    expect(process.env.CLAUDE_CODE_USE_OPENAI).toBe('1')
+    expect(process.env.OPENAI_BASE_URL).toBe('https://api.openai.com/v1')
+    expect(process.env.OPENAI_MODEL).toBe('gpt-4o')
+  })
+
+  test('applies saved profile over an ambient env-only xAI credential', async () => {
+    // Same ambient-key rule, unified across env-only vendors (xai here).
+    const { applyActiveProviderProfileFromConfig } =
+      await importFreshProviderProfileModules()
+    process.env.XAI_API_KEY = 'xai-live-key'
+
+    const applied = applyActiveProviderProfileFromConfig({
+      providerProfiles: [
+        buildProfile({
+          id: 'saved_openai',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'gpt-4o',
+        }),
+      ],
+      activeProviderProfileId: 'saved_openai',
+    } as any)
+
+    expect(applied?.id).toBe('saved_openai')
+    expect(process.env.CLAUDE_CODE_USE_OPENAI).toBe('1')
+    expect(process.env.OPENAI_BASE_URL).toBe('https://api.openai.com/v1')
+    expect(process.env.OPENAI_MODEL).toBe('gpt-4o')
+  })
+
   test('does not override explicit startup selection when profile marker is stale', async () => {
     const { applyActiveProviderProfileFromConfig } =
       await importFreshProviderProfileModules()
