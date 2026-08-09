@@ -122,6 +122,38 @@ describe('resolveModelRuntimeLimits', () => {
       ).toBe(1_000_000)
     })
   })
+  it('falls back to the stale discovery cache when the fresh entry expires', async () => {
+    await withTempConfigDir(async () => {
+      const baseUrl = 'http://localhost:4001/v1'
+      await setCachedModels(
+        getDiscoveryCacheKey('custom', {
+          baseUrl,
+        }),
+        {
+          models: [
+            {
+              id: 'stale-litellm-proxy',
+              apiName: 'stale-litellm-proxy',
+              label: 'stale-litellm-proxy',
+              contextWindow: 1_000_000,
+            },
+          ],
+          // Two days old — past the 1d discovery-cache TTL.
+          updatedAt: Date.now() - 2 * 86_400_000,
+        },
+      )
+
+      expect(
+        resolveModelRuntimeLimits({
+          model: 'stale-litellm-proxy',
+          processEnv: {
+            CLAUDE_CODE_USE_OPENAI: '1',
+            OPENAI_BASE_URL: baseUrl,
+          },
+        }).contextWindow,
+      ).toBe(1_000_000)
+    })
+  })
 
   it('uses the stable xAI OAuth cache identity for discovered runtime limits', async () => {
     await withTempConfigDir(async () => {

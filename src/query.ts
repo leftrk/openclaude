@@ -9,8 +9,10 @@ import { isMainThreadGoalSource } from './services/goal/controller.js'
 import {
   calculateTokenWarningState,
   getAutoCompactThreshold,
+  getEffectiveContextWindowSize,
   isAutoCompactEnabled,
   MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES,
+  MESSAGE_COUNT_FORCE_MIN_WINDOW_FRACTION,
   type AutoCompactTrackingState,
 } from './services/compact/autoCompact.js'
 import { consumeCompactionRequest } from './utils/memoryPressure.js'
@@ -1065,15 +1067,44 @@ async function* queryLoop(
           process.env.OPENCLAUDE_MAX_ACTIVE_MESSAGES,
         )
       : 0
+    // The default 200-message threshold exists to bound per-turn latency,
+    // but a raw message count is not by itself evidence of context pressure
+    // for large-window models (200 messages can be ~10% of a 1M window),
+    // and forced compaction destroys state the window could have kept. Gate
+    // the default threshold on token pressure; explicit user/legacy
+    // thresholds and the 1000-message hard cap still force unconditionally.
+    const hasMessageCountTokenPressure =
+      canForceCompact &&
+      tokenCountWithEstimation(messagesForQuery) - snipTokensFreed >=
+        getEffectiveContextWindowSize(toolUseContext.options.mainLoopModel) *
+          MESSAGE_COUNT_FORCE_MIN_WINDOW_FRACTION
+    // Matching safety limit for the post-autocompact enforcement below: when
+    // only the default threshold applies and there is no token pressure, the
+    // message count alone must not block requests either — the 1000-message
+    // hard cap stays as the only enforced limit.
+    const activeMessageSafetyLimit =
+      !canForceCompact ||
+      hasActiveMessageLimitOverride ||
+      hasMessageCountTokenPressure
+        ? activeMessageLimit
+        : getMaxActiveMessagesHardCap()
     if (canForceCompact) {
+      const isOverMessageLimit = isAboveMaxActiveMessagesLimit(
+        messagesForQuery.length,
+        activeMessageLimit,
+      )
+      const isOverMessageHardCap = isAboveMaxActiveMessagesLimit(
+        messagesForQuery.length,
+        getMaxActiveMessagesHardCap(),
+      )
       if (
-        isAboveMaxActiveMessagesLimit(messagesForQuery.length, activeMessageLimit) &&
+        isOverMessageLimit &&
         (isAutoCompactEnabled() ||
           hasActiveMessageLimitOverride ||
-          isAboveMaxActiveMessagesLimit(
-            messagesForQuery.length,
-            getMaxActiveMessagesHardCap(),
-          ))
+          isOverMessageHardCap) &&
+        (hasActiveMessageLimitOverride ||
+          isOverMessageHardCap ||
+          hasMessageCountTokenPressure)
       ) {
         tracking = {
           ...(tracking ?? { compacted: false, turnId: '', turnCounter: 0 }),
@@ -1444,7 +1475,7 @@ async function* queryLoop(
       const isAboveActiveMessageSafetyLimit =
         isAboveMaxActiveMessagesLimit(
           messagesForQuery.length,
-          activeMessageLimit,
+          activeMessageSafetyLimit,
         ) && shouldEnforceActiveMessageLimit
       const isAboveBreakerThreshold =
         isAboveAutoCompactThreshold ||
@@ -1476,7 +1507,7 @@ async function* queryLoop(
       shouldEnforceActiveMessageLimit &&
       isAboveMaxActiveMessagesLimit(
         messagesForQuery.length,
-        activeMessageLimit,
+        activeMessageSafetyLimit,
       )
     ) {
       yield createAssistantAPIErrorMessage({
