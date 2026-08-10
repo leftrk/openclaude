@@ -12,17 +12,17 @@ OpenClaude is an open-source coding-agent CLI for cloud and local model provider
 
 Use OpenAI-compatible APIs, Gemini, GitHub Models, Codex OAuth, Codex, Ollama, Atomic Chat, and other supported backends while keeping one terminal-first workflow: prompts, tools, agents, MCP, slash commands, and streaming output.
 
-[![PR Checks](https://github.com/Gitlawb/openclaude/actions/workflows/pr-checks.yml/badge.svg?branch=main)](https://github.com/Gitlawb/openclaude/actions/workflows/pr-checks.yml)
-[![Release](https://img.shields.io/github/v/tag/Gitlawb/openclaude?label=release&color=0ea5e9)](https://github.com/Gitlawb/openclaude/tags)
-[![npm downloads](https://img.shields.io/npm/dm/@gitlawb/openclaude)](https://www.npmjs.com/package/@gitlawb/openclaude)
-[![Discussions](https://img.shields.io/badge/discussions-open-7c3aed)](https://github.com/Gitlawb/openclaude/discussions)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/k68zFR6AcB)
-[![X](https://img.shields.io/badge/X-@gitlawb-000000?logo=x&logoColor=white)](https://x.com/gitlawb)
+> **This repository** ([leftrk/openclaude](https://github.com/leftrk/openclaude)) is an
+> independent distribution based on [Gitlawb/openclaude](https://github.com/Gitlawb/openclaude),
+> carrying additional fixes on top of upstream. Releases ship through the
+> [`leftrk/tap`](https://github.com/leftrk/homebrew-tap) Homebrew tap with prebuilt
+> bottles for Apple Silicon macOS and x86_64 Linux — no local build needed.
+
+[![PR Checks](https://github.com/leftrk/openclaude/actions/workflows/pr-checks.yml/badge.svg?branch=main)](https://github.com/leftrk/openclaude/actions/workflows/pr-checks.yml)
+[![Release](https://img.shields.io/github/v/tag/leftrk/openclaude?label=release&color=0ea5e9)](https://github.com/leftrk/openclaude/tags)
+[![Homebrew](https://img.shields.io/badge/homebrew-leftrk%2Ftap-FBB040)](https://github.com/leftrk/homebrew-tap)
 [![Security Policy](https://img.shields.io/badge/security-policy-0f766e)](SECURITY.md)
 [![License](https://img.shields.io/badge/license-MIT-2563eb)](LICENSE)
-
-OpenClaude is also mirrored to GitLawb:
-[gitlawb.com/node/repos/z6MkqDnb/openclaude](https://gitlawb.com/node/repos/z6MkqDnb/openclaude)
 
 [Quick Start](#quick-start) | [Setup Guides](#setup-guides) | [Providers](#supported-providers) | [Development](#development) | [VS Code Extension](#vs-code-extension) | [Partners](#partners) | [Community](#community)
 
@@ -96,8 +96,18 @@ OpenClaude is also mirrored to GitLawb:
 
 ### Install
 
-OpenClaude requires Node.js `>=22.0.0` for npm installs and runtime. Bun is
-only needed for source builds and local development.
+```bash
+brew install leftrk/tap/openclaude
+```
+
+This distribution ships prebuilt bottles for Apple Silicon macOS (Sonoma and
+newer) and x86_64 Linux, so `brew install` pours binaries instead of compiling
+anything locally; Homebrew also installs the `node` and `bun` dependencies as
+bottles. Platforms without a bottle fall back to a source build, which
+requires Node.js `>=22.0.0` and Bun.
+
+The npm package [`@gitlawb/openclaude`](https://www.npmjs.com/package/@gitlawb/openclaude)
+is published by the upstream Gitlawb project and may lag this distribution:
 
 ```bash
 npm install -g @gitlawb/openclaude@latest
@@ -114,8 +124,7 @@ If the install later reports `ripgrep not found`, install ripgrep system-wide an
 
 ```bash
 openclaude --version
-npm view @gitlawb/openclaude dist-tags
-npm install -g @gitlawb/openclaude@latest
+brew update && brew upgrade leftrk/tap/openclaude   # pick up the latest release
 ```
 
 ### Start
@@ -450,10 +459,10 @@ If you believe you found a security issue, see [SECURITY.md](SECURITY.md).
 
 ## Community
 
-- Use [GitHub Discussions](https://github.com/Gitlawb/openclaude/discussions) for Q&A, ideas, and community conversation
-- Use [GitHub Issues](https://github.com/Gitlawb/openclaude/issues) for confirmed bugs and actionable feature work
-- Join the [Discord](https://discord.gg/k68zFR6AcB) to chat with the community in real time
-- Follow [@gitlawb on X](https://x.com/gitlawb) for updates and announcements
+- Use [GitHub Issues](https://github.com/leftrk/openclaude/issues) for bugs and feature work specific to this distribution
+- Use upstream [GitHub Discussions](https://github.com/Gitlawb/openclaude/discussions) and [Issues](https://github.com/Gitlawb/openclaude/issues) for the base project
+- Join the upstream [Discord](https://discord.gg/k68zFR6AcB) to chat with the community in real time
+- Follow [@gitlawb on X](https://x.com/gitlawb) for upstream updates and announcements
 
 ## Contributing
 
