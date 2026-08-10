@@ -102,3 +102,8 @@ When modifying provider behavior:
 - Do not silently change provider tags; maintainers control them during review.
 - Do not ignore CodeRabbit or maintainer feedback; address it before requesting more review.
 - Do not add a manually maintained release-notes data source to the static site; link to GitHub Releases instead.
+
+## Local Machine Notes (leftrk fork)
+
+- Releases ship via the `leftrk/tap` Homebrew tap: commit `chore(release): vX.Y.Z` (bump `package.json` + `.release-please-manifest.json`), `git tag vX.Y.Z`, push both — `.github/workflows/homebrew-tap.yml` bumps the formula and triggers bottle rebuilds automatically. Versioning is Chrome-style major-first (28, 29, ...); minor bumps (28.1.0) are fine for small releases.
+- This machine keeps an on-demand SOCKS5 proxy at `127.0.0.1:1080` (SSH tunnel, managed per `~/.config/keys/proxy.md`). For large or overseas downloads (brew bottles, npm, GitHub tarballs), prefix with `ALL_PROXY=socks5h://127.0.0.1:1080` — often much faster than a direct connection.
