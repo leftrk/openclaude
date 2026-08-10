@@ -1,0 +1,132 @@
+name: Homebrew Tap
+
+# Publishes each pushed release tag to the leftrk/homebrew-tap formula:
+# compute the tag tarball sha256, bump url/sha256/version in
+# Formula/openclaude.rb (dropping the now-stale bottle block), push, then
+# dispatch the tap's bottle.yml to rebuild bottles and commit fresh hashes.
+#
+# Requires the HOMEBREW_TAP_TOKEN secret: a fine-grained PAT scoped to
+# leftrk/homebrew-tap with Contents: Read/Write and Actions: Read/Write.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v0.27.3)"
+        required: true
+
+concurrency:
+  group: homebrew-tap-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bump-formula:
+    name: Bump openclaude formula in homebrew-tap
+    # Fork-only: upstream releases publish to npm and must not touch this tap.
+    if: ${{ github.repository == 'leftrk/openclaude' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Resolve tag and version
+        id: meta
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          TAG="${INPUT_TAG:-$GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid tag: $TAG" >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute tag tarball sha256
+        id: tarball
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          URL="https://github.com/leftrk/openclaude/archive/refs/tags/${TAG}.tar.gz"
+          SHA=""
+          for attempt in $(seq 1 12); do
+            if SHA="$(curl -fsSL "$URL" | shasum -a 256 | awk '{print $1}')"; then
+              break
+            fi
+            echo "Attempt ${attempt}: tarball not ready yet, retrying in 5s"
+            sleep 5
+          done
+          if [ -z "$SHA" ]; then
+            echo "Failed to fetch $URL" >&2
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: leftrk/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update formula
+        env:
+          URL: ${{ steps.tarball.outputs.url }}
+          SHA256: ${{ steps.tarball.outputs.sha256 }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          python3 <<'PYEOF'
+          import os, re
+
+          path = "homebrew-tap/Formula/openclaude.rb"
+          formula = open(path).read()
+
+          # Drop the stale bottle block first: it points at the previous
+          # version's bottles, and removing it up front also guarantees the
+          # first `sha256 "..."` replaced below is the source tarball's,
+          # not a bottle hash.
+          formula = re.sub(r"\n *bottle do\n.*?\n *end\n", "\n", formula, flags=re.DOTALL)
+          formula = re.sub(r'url "[^"]+"', f'url "{os.environ["URL"]}"', formula, count=1)
+          formula = re.sub(r'sha256 "[0-9a-f]{64}"', f'sha256 "{os.environ["SHA256"]}"', formula, count=1)
+          formula = re.sub(r'version "[^"]+"', f'version "{os.environ["VERSION"]}"', formula, count=1)
+
+          open(path, "w").write(formula)
+          PYEOF
+
+      - name: Commit and push formula bump
+        id: commit
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/openclaude.rb
+          if git diff --cached --quiet; then
+            echo "Formula already up to date for $TAG"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "chore: bump openclaude to $TAG (leftrk fork)"
+            git pull --rebase origin main
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger bottle rebuild
+        if: ${{ steps.commit.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: gh workflow run bottle.yml -R leftrk/homebrew-tap -f formula=openclaude
+
+      - name: Release summary
+        run: |
+          {
+            echo "## Homebrew tap updated for ${{ steps.meta.outputs.tag }}"
+            echo
+            echo "- Formula: https://github.com/leftrk/homebrew-tap/blob/main/Formula/openclaude.rb"
+            echo "- Bottles: https://github.com/leftrk/homebrew-tap/actions/workflows/bottle.yml"
+          } >> "$GITHUB_STEP_SUMMARY"
