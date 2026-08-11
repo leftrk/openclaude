@@ -9,10 +9,8 @@ import { isMainThreadGoalSource } from './services/goal/controller.js'
 import {
   calculateTokenWarningState,
   getAutoCompactThreshold,
-  getEffectiveContextWindowSize,
   isAutoCompactEnabled,
   MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES,
-  MESSAGE_COUNT_FORCE_MIN_WINDOW_FRACTION,
   type AutoCompactTrackingState,
 } from './services/compact/autoCompact.js'
 import { consumeCompactionRequest } from './utils/memoryPressure.js'
@@ -1036,15 +1034,18 @@ async function* queryLoop(
       appendSystemContext(asSystemPrompt(promptWithArc), systemContext),
     )
 
-    // Force compaction if memory pressure detected or message count exceeded.
+    // Force compaction only for an explicit message-count threshold (the
+    // /config UI setting or the legacy OPENCLAUDE_MAX_ACTIVE_MESSAGES env).
+    // There is no default message-count limit: auto-compact is driven by the
+    // token window alone, so large-context models can use their full window
+    // no matter how many small messages the session accumulates.
     // Sets forceReason on tracking so autoCompactIfNeeded bypasses the
     // token-threshold check. Consumed once (one-shot) inside autocompact.
     // Skip for compact/session_memory sources — those run inside an existing
     // compaction and forcing would deadlock via recursive autocompaction.
     const canForceCompact =
       querySource !== 'compact' && querySource !== 'session_memory'
-    // An unset UI setting keeps the legacy environment override. Without that
-    // override, enforce the new effective 200-message default.
+    // An unset UI setting keeps the legacy environment override.
     const hasValidLegacyActiveMessageLimit =
       parseMaxActiveMessagesLimit(process.env.OPENCLAUDE_MAX_ACTIVE_MESSAGES) > 0
     const maxMessagesLimitSetting =
@@ -1067,44 +1068,20 @@ async function* queryLoop(
           process.env.OPENCLAUDE_MAX_ACTIVE_MESSAGES,
         )
       : 0
-    // The default 200-message threshold exists to bound per-turn latency,
-    // but a raw message count is not by itself evidence of context pressure
-    // for large-window models (200 messages can be ~10% of a 1M window),
-    // and forced compaction destroys state the window could have kept. Gate
-    // the default threshold on token pressure; explicit user/legacy
-    // thresholds and the 1000-message hard cap still force unconditionally.
-    const hasMessageCountTokenPressure =
-      canForceCompact &&
-      tokenCountWithEstimation(messagesForQuery) - snipTokensFreed >=
-        getEffectiveContextWindowSize(toolUseContext.options.mainLoopModel) *
-          MESSAGE_COUNT_FORCE_MIN_WINDOW_FRACTION
-    // Matching safety limit for the post-autocompact enforcement below: when
-    // only the default threshold applies and there is no token pressure, the
-    // message count alone must not block requests either — the 1000-message
-    // hard cap stays as the only enforced limit.
+    // Matching limit for the post-autocompact enforcement below: without an
+    // explicit override, message count alone must not block requests either
+    // (the env hard cap defaults to 0 = disabled).
     const activeMessageSafetyLimit =
-      !canForceCompact ||
-      hasActiveMessageLimitOverride ||
-      hasMessageCountTokenPressure
+      !canForceCompact || hasActiveMessageLimitOverride
         ? activeMessageLimit
         : getMaxActiveMessagesHardCap()
     if (canForceCompact) {
-      const isOverMessageLimit = isAboveMaxActiveMessagesLimit(
-        messagesForQuery.length,
-        activeMessageLimit,
-      )
-      const isOverMessageHardCap = isAboveMaxActiveMessagesLimit(
-        messagesForQuery.length,
-        getMaxActiveMessagesHardCap(),
-      )
       if (
-        isOverMessageLimit &&
-        (isAutoCompactEnabled() ||
-          hasActiveMessageLimitOverride ||
-          isOverMessageHardCap) &&
-        (hasActiveMessageLimitOverride ||
-          isOverMessageHardCap ||
-          hasMessageCountTokenPressure)
+        hasActiveMessageLimitOverride &&
+        isAboveMaxActiveMessagesLimit(
+          messagesForQuery.length,
+          activeMessageLimit,
+        )
       ) {
         tracking = {
           ...(tracking ?? { compacted: false, turnId: '', turnCounter: 0 }),

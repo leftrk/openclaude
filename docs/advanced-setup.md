@@ -817,33 +817,35 @@ For `dev:atomic-chat`, make sure Atomic Chat is running with a model loaded befo
 
 ## Message-Count Compaction Threshold
 
-By default, OpenClaude compacts conversations based on token usage and also
-applies a safety hard cap of 1000 active messages. The hard cap catches long
-sessions that accumulate many small messages with negligible token cost.
+By default, OpenClaude compacts conversations based on token usage alone —
+there is no default message-count limit, so large-context models can use
+their full window no matter how many small messages a session accumulates.
 
-This hard cap is a safety net: it can still trigger compaction even when
-`DISABLE_COMPACT`, `DISABLE_AUTO_COMPACT`, or a disabled auto-compact setting
-would otherwise prevent it. Set `OPENCLAUDE_MAX_ACTIVE_MESSAGES_HARD_CAP=0`
-only when you need to suppress that safety cap for diagnostics.
-
-If you frequently resume long sessions that accumulate hundreds of small
-tool-result messages with negligible token cost, adjust message-count
-compaction via the in-app `/config` command:
+If you want compaction to also trigger on message count (for example, long
+sessions that accumulate hundreds of small tool-result messages with
+negligible token cost), configure a threshold via the in-app `/config`
+command:
 
 ```text
 /config
 ```
 
-Message-count compaction defaults to `200` messages. Select
-**Message-count compaction** to choose a different threshold (`100`, `500`, or
-`1000`), or set it to `off` to disable the setting's proactive guard. The
-built-in hard cap remains, and an `OPENCLAUDE_MAX_ACTIVE_MESSAGES` override
-remains active when configured.
+Select **Message-count compaction** to choose a threshold (`100`, `200`,
+`500`, or `1000`). An explicitly configured threshold forces compaction when
+the active message count exceeds it, even when `DISABLE_COMPACT`,
+`DISABLE_AUTO_COMPACT`, or a disabled auto-compact setting would otherwise
+prevent it. The default is `off`-equivalent behavior: the setting is unset
+and no message-count compaction runs.
 
 The legacy `OPENCLAUDE_MAX_ACTIVE_MESSAGES` environment variable is honored
 when the setting is unset or `off`. An explicit numeric setting takes
-precedence over that legacy value. `OPENCLAUDE_MAX_ACTIVE_MESSAGES_HARD_CAP`
-can override the safety cap; set it to `0` only for diagnostics.
+precedence over that legacy value.
+
+A safety hard cap on active messages can be enabled with
+`OPENCLAUDE_MAX_ACTIVE_MESSAGES_HARD_CAP` (for example, `1000`). It is `0`
+(disabled) by default; when set, it acts as a last-resort safety net that can
+trigger compaction and block oversized requests even when other guards are
+disabled.
 
 ### Long-session memory guard validation
 
