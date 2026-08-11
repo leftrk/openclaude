@@ -1,4 +1,8 @@
-export const DEFAULT_MAX_ACTIVE_MESSAGES_HARD_CAP = 1000
+// 0 = disabled. Message count no longer forces compaction by default —
+// auto-compact is driven by the token window alone, so large-context models
+// can use their full window no matter how many small messages a session
+// accumulates. Set OPENCLAUDE_MAX_ACTIVE_MESSAGES_HARD_CAP to re-enable a cap.
+export const DEFAULT_MAX_ACTIVE_MESSAGES_HARD_CAP = 0
 
 type MaxActiveMessagesEnv = Record<string, string | undefined>
 

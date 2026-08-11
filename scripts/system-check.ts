@@ -171,9 +171,11 @@ export function buildMemoryGuardChecks(
 
   results.push(
     hardCap === 0
-      ? fail(
+      ? pass(
           'Active-message hard cap',
-          'Disabled by OPENCLAUDE_MAX_ACTIVE_MESSAGES_HARD_CAP=0; long sessions can grow without the active-message safety cap.',
+          hardCapOverride !== undefined && hardCapOverride.trim() !== '0'
+            ? 'Disabled; malformed override fell back to the disabled default. Message count no longer limits sessions — auto-compact is token-window driven.'
+            : 'Disabled (default); message count no longer limits sessions — auto-compact is token-window driven. Set OPENCLAUDE_MAX_ACTIVE_MESSAGES_HARD_CAP to enable a cap.',
         )
       : pass(
           'Active-message hard cap',

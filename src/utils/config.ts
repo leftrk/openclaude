@@ -755,8 +755,9 @@ function createDefaultGlobalConfig(): GlobalConfig {
     knowledgeGraphEnabled: true,
     // Omitted by default so callers can distinguish "unset" from an explicit
     // persisted "off"; normalizeMaxMessagesCompactionThreshold resolves an
-    // unset value to the effective default of '200' (message-count compaction
-    // enabled at 200 messages) to bound per-turn latency growth (issue #1949).
+    // unset value to the fallback of '200'. Message-count compaction only
+    // forces when a threshold is explicitly configured — there is no default
+    // message-count limit (auto-compact is token-window driven).
   }
   return config
 }

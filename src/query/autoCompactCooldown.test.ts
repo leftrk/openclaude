@@ -359,13 +359,13 @@ test('numeric message-count threshold keeps automatic microcompact behavior', as
   expect(microcompact).toHaveBeenCalledTimes(1)
 })
 
-test('default active-message hard cap forces compaction', async () => {
+test('default has no message-count limit: 1001 messages do not force compaction', async () => {
   const { terminal, callModel, seenTracking } =
     await runMessageCountHardCapQuery(manySmallMessages(1001))
 
   expect(terminal.reason).toBe('max_turns')
   expect(callModel).toHaveBeenCalledTimes(1)
-  expect(seenTracking[0]?.forceReason).toBe('message-count')
+  expect(seenTracking[0]?.forceReason).toBeUndefined()
 })
 
 test('unset message threshold does not force compaction without token pressure', async () => {
@@ -377,21 +377,23 @@ test('unset message threshold does not force compaction without token pressure',
   expect(seenTracking[0]?.forceReason).toBeUndefined()
 })
 
-test('unset message threshold forces compaction at 200 messages under token pressure', async () => {
-  // The 200-message default is gated on token pressure (>=80% of the
-  // effective window). The test window is 200k (effective ~180k), so a
-  // ~150k-token message puts the 201-message history over the gate.
-  const messages = [...manySmallMessages(200), userMessage('x'.repeat(600_000))]
+test('unset message threshold does not force compaction even under token pressure', async () => {
+  // There is no default message-count threshold anymore: without an explicit
+  // user/legacy limit, a large message count never forces compaction, even
+  // deep into the token window. The test window is 128k (effective ~108k,
+  // blocking at ~105k), so a ~90k-token message would have tripped the old
+  // 80% pressure gate (~86k) without hitting the blocking limit.
+  const messages = [...manySmallMessages(200), userMessage('x'.repeat(360_000))]
 
   const { terminal, callModel, seenTracking } =
     await runMessageCountHardCapQuery(messages)
 
   expect(terminal.reason).toBe('max_turns')
   expect(callModel).toHaveBeenCalledTimes(1)
-  expect(seenTracking[0]?.forceReason).toBe('message-count')
+  expect(seenTracking[0]?.forceReason).toBeUndefined()
 })
 
-test('invalid legacy message threshold falls back to the gated 200-message default', async () => {
+test('invalid legacy message threshold does not force compaction', async () => {
   process.env.OPENCLAUDE_MAX_ACTIVE_MESSAGES = 'not-a-number'
 
   const { terminal, callModel, seenTracking } =
@@ -473,6 +475,12 @@ test('explicit off preserves a legacy message threshold', async () => {
 })
 
 test('long-session smoke keeps repeated over-cap turns bounded before provider calls', async () => {
+  // Explicit thresholds still force unconditionally, so configure one to
+  // exercise the repeated-over-cap flow (there is no default cap anymore).
+  saveGlobalConfig(current => ({
+    ...current,
+    maxMessagesCompactionThreshold: '1000',
+  }))
   const seenProviderMessageCounts: number[] = []
   const seenTracking: Array<AutoCompactTrackingState | undefined> = []
   const callModel = mock(async function* (params: { messages: Message[] }) {
@@ -532,7 +540,9 @@ test('long-session smoke keeps repeated over-cap turns bounded before provider c
   expect(seenProviderMessageCounts.every(count => count <= 1000)).toBe(true)
 })
 
-test('invalid active-message hard cap override keeps default safety cap', async () => {
+test('invalid active-message hard cap override keeps message-count limits disabled', async () => {
+  // The default hard cap is 0 (disabled); an invalid override cannot
+  // accidentally re-enable a message-count limit.
   process.env.OPENCLAUDE_MAX_ACTIVE_MESSAGES_HARD_CAP = '100O'
 
   const { terminal, callModel, seenTracking } =
@@ -540,17 +550,10 @@ test('invalid active-message hard cap override keeps default safety cap', async 
 
   expect(terminal.reason).toBe('max_turns')
   expect(callModel).toHaveBeenCalledTimes(1)
-  expect(seenTracking[0]?.forceReason).toBe('message-count')
+  expect(seenTracking[0]?.forceReason).toBeUndefined()
 })
 
-test('explicit zero active-message hard cap override disables safety cap', async () => {
-  // Isolate the hard-cap override: with the 200-message-count default active,
-  // a 1001-message history would otherwise force message-count compaction, so
-  // disable message-count compaction explicitly to test only the hard cap.
-  saveGlobalConfig(current => ({
-    ...current,
-    maxMessagesCompactionThreshold: 'off',
-  }))
+test('explicit zero active-message hard cap override keeps safety cap disabled', async () => {
   process.env.OPENCLAUDE_MAX_ACTIVE_MESSAGES_HARD_CAP = '0'
 
   const { terminal, callModel, seenTracking } =
@@ -562,6 +565,9 @@ test('explicit zero active-message hard cap override disables safety cap', async
 })
 
 test('active-message hard cap blocks when forced compaction fails', async () => {
+  // The hard cap is disabled by default; enable it explicitly to test the
+  // post-compaction enforcement path.
+  process.env.OPENCLAUDE_MAX_ACTIVE_MESSAGES_HARD_CAP = '1000'
   const messages = manySmallMessages(1001)
   const callModel = mock(() => {
     throw new Error('model should not be called while over the hard cap')
@@ -726,6 +732,9 @@ test('active auto-compact cooldown blocks before model call with cooldown guidan
 })
 
 test('active auto-compact cooldown blocks message-count overflow before model call', async () => {
+  // The hard cap is disabled by default; enable it explicitly so message
+  // count alone puts the session over the safety threshold.
+  process.env.OPENCLAUDE_MAX_ACTIVE_MESSAGES_HARD_CAP = '1000'
   const messages = manySmallMessages(1001)
   const nextRetryAtMs = Date.now() + 60_000
   const callModel = mock(() => {
