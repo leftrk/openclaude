@@ -515,7 +515,7 @@ describe('OpenCode edge cases', () => {
     )
 
     expect(models.get('opencode-qwen3.6-plus')?.contextWindow).toBe(262_144)
-    expect(models.get('opencode-deepseek-v4-pro')?.maxOutputTokens).toBe(384_000)
+    expect(models.get('opencode-deepseek-v4-pro')?.maxOutputTokens).toBe(65_536)
     expect(models.get('opencode-go-minimax-m2.7')?.maxOutputTokens).toBe(131_072)
     expect(models.get('opencode-go-mimo-v2.5')?.contextWindow).toBe(1_000_000)
   })
