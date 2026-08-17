@@ -9,8 +9,14 @@ import {
 import {
   getGlobalConfig,
   saveGlobalConfig,
+  type GlobalConfig,
   type ProviderProfile,
 } from './config.js'
+import {
+  readSyncedProviders,
+  syncedProvidersExists,
+  writeSyncedProviders,
+} from './syncedConfigFiles.js'
 import type { ModelOption } from './model/modelOptions.js'
 import { getPrimaryModel, parseModelList } from './providerModels.js'
 import {
@@ -543,7 +549,45 @@ export function getProviderPresetDefaults(
 export function getProviderProfiles(
   config = getGlobalConfig(),
 ): ProviderProfile[] {
-  return sanitizeProfiles(config.providerProfiles)
+  // leftrk fork: ~/.openclaude/providers.json is authoritative when present.
+  const synced = readSyncedProviders()
+  return sanitizeProfiles(synced ? synced.profiles : config.providerProfiles)
+}
+
+/**
+ * leftrk fork: saveGlobalConfig variant for the profile-state writers below.
+ * When ~/.openclaude/providers.json exists, the updater runs against the
+ * synced state, the resulting profiles/activeId are written to the synced
+ * file, and the embedded copies in ~/.openclaude.json are cleared so API
+ * keys never live in two places. Other fields (caches etc.) still go through
+ * the normal global-config write.
+ */
+function saveProfilesConfig(
+  updater: (currentConfig: GlobalConfig) => GlobalConfig,
+): void {
+  saveGlobalConfig(current => {
+    const synced = readSyncedProviders()
+    const effective = synced
+      ? {
+          ...current,
+          providerProfiles: synced.profiles,
+          activeProviderProfileId: synced.activeProfileId,
+        }
+      : current
+    const next = updater(effective)
+    if (next === effective || !synced) {
+      return next === effective ? current : next
+    }
+    writeSyncedProviders({
+      profiles: next.providerProfiles ?? [],
+      activeProfileId: next.activeProviderProfileId,
+    })
+    return {
+      ...next,
+      providerProfiles: [],
+      activeProviderProfileId: undefined,
+    }
+  })
 }
 
 export function hasProviderProfiles(config = getGlobalConfig()): boolean {
@@ -904,7 +948,11 @@ export function getActiveProviderProfile(
     return undefined
   }
 
-  const activeId = trimOrUndefined(config.activeProviderProfileId)
+  // leftrk fork: synced providers.json carries its own activeProfileId.
+  const synced = readSyncedProviders()
+  const activeId = trimOrUndefined(
+    synced ? synced.activeProfileId : config.activeProviderProfileId,
+  )
   // Explicit Anthropic selection: do not fall back to the first saved profile.
   if (activeId === ANTHROPIC_DEFAULT_PROFILE_ID) {
     return undefined
@@ -924,7 +972,7 @@ export function clearActiveProviderProfile(
 ): boolean {
   const hadActiveProfile = getActiveProviderProfile() !== undefined
 
-  saveGlobalConfig(config => ({
+  saveProfilesConfig(config => ({
     ...config,
     activeProviderProfileId: ANTHROPIC_DEFAULT_PROFILE_ID,
     openaiAdditionalModelOptionsCache: [],
@@ -1291,7 +1339,7 @@ export function addProviderProfile(
 
   const makeActive = options?.makeActive ?? true
 
-  saveGlobalConfig(current => {
+  saveProfilesConfig(current => {
     const currentProfiles = getProviderProfiles(current)
     const nextProfiles = [...currentProfiles, profile]
     const currentActive = trimOrUndefined(current.activeProviderProfileId)
@@ -1346,7 +1394,7 @@ export function updateProviderProfile(
   let wasUpdated = false
   let shouldApply = false
 
-  saveGlobalConfig(current => {
+  saveProfilesConfig(current => {
     const currentProfiles = getProviderProfiles(current)
     const profileIndex = currentProfiles.findIndex(
       profile => profile.id === profileId,
@@ -1880,7 +1928,7 @@ export function setActiveProviderProfile(
 
   const profileModelOptions = getProfileModelOptions(activeProfile, current)
 
-  saveGlobalConfig(config => ({
+  saveProfilesConfig(config => ({
     ...config,
     activeProviderProfileId: profileId,
     openaiAdditionalModelOptionsCache: profileModelOptions,
@@ -1914,7 +1962,7 @@ export function deleteProviderProfile(profileId: string): {
   let nextActiveProfile: ProviderProfile | undefined
   let activeProfileWasDeleted = false
 
-  saveGlobalConfig(current => {
+  saveProfilesConfig(current => {
     const currentProfiles = getProviderProfiles(current)
     const existing = currentProfiles.find(profile => profile.id === profileId)
 

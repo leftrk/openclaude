@@ -24,6 +24,7 @@ import type { ConfigScope, ScopedMcpServerConfig } from '../../services/mcp/type
 import { describeMcpConfigFilePath, ensureConfigScope, getScopeLabel } from '../../services/mcp/utils.js';
 import { AppStateProvider } from '../../state/AppState.js';
 import { getCurrentProjectConfig, getGlobalConfig, saveCurrentProjectConfig } from '../../utils/config.js';
+import { readSyncedMcpJson, syncedMcpJsonExists } from '../../utils/syncedConfigFiles.js';
 import { isFsInaccessible } from '../../utils/errors.js';
 import { gracefulShutdown } from '../../utils/gracefulShutdown.js';
 import { safeParseJSON } from '../../utils/json.js';
@@ -211,7 +212,11 @@ export async function mcpRemoveHandler(name: string, options: {
     const scopes: Array<Exclude<ConfigScope, 'dynamic'>> = [];
     if (projectConfig.mcpServers?.[name]) scopes.push('local');
     if (mcpJsonExists) scopes.push('project');
-    if (globalConfig.mcpServers?.[name]) scopes.push('user');
+    // leftrk fork: when ~/.openclaude/mcp.json exists it is the user scope.
+    const userServers = syncedMcpJsonExists()
+      ? readSyncedMcpJson()?.mcpServers
+      : globalConfig.mcpServers;
+    if (userServers?.[name]) scopes.push('user');
     if (scopes.length === 0) {
       cliError(`No MCP server found with name: "${name}"`);
     } else if (scopes.length === 1) {
