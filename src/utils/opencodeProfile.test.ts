@@ -15,7 +15,6 @@ function profile(profile: ProfileFile['profile'], env: ProfileFile['env']): Prof
   return {
     profile,
     env,
-    createdAt: '2026-05-25T00:00:00.000Z',
   }
 }
 
