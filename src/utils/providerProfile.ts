@@ -220,7 +220,6 @@ export type ProfileEnv = {
 export type ProfileFile = {
   profile: ProviderProfile
   env: ProfileEnv
-  createdAt: string
 }
 
 // SecretValueSource is intentionally open (Partial<Record<string, ...>>) so
@@ -302,10 +301,6 @@ function readProfileFile(filePath: string): ProfileFile | null {
     return {
       profile: parsed.profile,
       env: parsed.env,
-      createdAt:
-        typeof parsed.createdAt === 'string'
-          ? parsed.createdAt
-          : new Date().toISOString(),
     }
   } catch {
     return null
@@ -1251,7 +1246,6 @@ export function createProfileFile(
   return {
     profile,
     env,
-    createdAt: new Date().toISOString(),
   }
 }
 

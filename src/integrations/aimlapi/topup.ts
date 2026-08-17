@@ -246,7 +246,6 @@ export async function runAimlapiTopup(options: AimlapiTopupOptions): Promise<voi
         OPENAI_MODEL: provisioned.model,
         CLAUDE_CODE_PROVIDER_ROUTE_ID: 'aimlapi',
       },
-      createdAt: new Date().toISOString(),
     })
     // Best-effort cleanup: the profile is already saved, so a lock/permission/IO
     // failure clearing the receipt must not report the whole top-up as failed.

@@ -53,7 +53,6 @@ function profile(profile: ProfileFile['profile'], env: ProfileFile['env']): Prof
   return {
     profile,
     env,
-    createdAt: '2026-04-01T00:00:00.000Z',
   }
 }
 
@@ -1028,7 +1027,6 @@ test('applyStartupEnvFromProfile still warns when a genuinely saved profile fail
     persisted: {
       profile: 'openai',
       env: { OPENAI_BASE_URL: 'https://api.openai.com/v1' },
-      createdAt: '2026-01-01T00:00:00.000Z',
     },
     processEnv,
     onValidationError: message => warnings.push(message),
@@ -1056,7 +1054,6 @@ test('applyStartupEnvFromProfile warns for a saved Opengateway-shaped profile ev
     persisted: {
       profile: 'openai',
       env: { OPENAI_BASE_URL: 'https://opengateway.gitlawb.com/v1' },
-      createdAt: '2026-01-01T00:00:00.000Z',
     },
     processEnv,
     onValidationError: message => warnings.push(message),
