@@ -21,6 +21,8 @@ import {
   isLocalProviderUrl,
   modelRequiresResponsesApi,
   resolveProviderRequest,
+  shouldInjectToolResultSemanticBoundary,
+  TOOL_RESULT_SEMANTIC_PLACEHOLDER,
 } from '../providerConfig.js'
 import { stableStringifyJson } from '../../../utils/stableStringify.js'
 import {
@@ -50,6 +52,8 @@ type Dependencies = {
       reasoningContentFallback?: '' | 'omit'
       preserveGeminiThoughtSignature?: boolean
       supportsImageInputs?: boolean
+      injectToolResultSemanticBoundary?: boolean
+      toolResultSemanticPlaceholder?: string
     },
   ): unknown
   convertSystemPrompt(system: unknown): string
@@ -140,6 +144,12 @@ export function prepareOpenAIRequest({
         request.baseUrl,
       ),
       supportsImageInputs: shimConfig.supportsImageInputs,
+      injectToolResultSemanticBoundary: shouldInjectToolResultSemanticBoundary({
+        baseUrl: request.baseUrl,
+        model: request.resolvedModel,
+        processEnv: requestProcessEnv,
+      }),
+      toolResultSemanticPlaceholder: TOOL_RESULT_SEMANTIC_PLACEHOLDER,
     })
     : undefined
 
