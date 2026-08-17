@@ -106,3 +106,16 @@ When modifying provider behavior:
 ## Release Flow (leftrk fork)
 
 - Releases ship via the `leftrk/tap` Homebrew tap: commit `chore(release): vX.Y.Z` (bump `package.json` + `.release-please-manifest.json`), `git tag vX.Y.Z`, push both — `.github/workflows/homebrew-tap.yml` bumps the formula and triggers bottle rebuilds automatically. Versioning is Chrome-style major-first (28, 29, ...); minor bumps (28.1.0) are fine for small releases.
+
+## Upstream Sync (leftrk fork)
+
+This fork tracks `upstream/main` (Gitlawb/openclaude) by **rebasing the fork stack**, not merging. The repo is maintained by a single user, so force-pushing `main` is acceptable.
+
+- Sync cadence: every 1–2 weeks or after each upstream release, while the delta is small.
+- Procedure: `git fetch upstream` (GitHub may need the local SOCKS5 proxy: `git -c http.proxy=socks5h://127.0.0.1:1080 fetch upstream`), then `git rebase upstream/main`, then verify and `git push --force-with-lease origin main`.
+- `rerere` is enabled — keep it on; repeated conflict shapes resolve automatically.
+- Expected recurring conflicts: `package.json` / `.release-please-manifest.json` version lines on release commits (take the release commit's version), `README.md` (fork slimmed it to brew-only; keep the fork version), `AGENTS.md` (keep upstream bullets, keep fork sections appended at the end).
+- Never move or re-point existing release tags — they were already consumed by the Homebrew tap. They will not be ancestors of rebased `main`; that is expected.
+- Watch out for resolutions that lived in old merge commits: a rebase drops merge commits, and any conflict resolution whose effect existed only in a merge tree silently disappears (this once dropped the tool-result semantic-boundary wiring in `requestPreparation.ts`). After each rebase, diff the new tree against the pre-rebase state and restore anything unintentionally lost.
+- After syncing, run `bun run typecheck` plus focused tests on files both sides touched (typically `src/utils/providerProfile*`, `src/integrations/runtimeMetadata*`, `src/integrations/aimlapi/`, `src/services/api/openaiShim*`).
+- Keep the fork delta small: PR generally useful fixes upstream instead of letting the local stack grow.
