@@ -33,3 +33,28 @@ confirm `rg --version` works in the same terminal.
   [Issues](https://github.com/leftrk/openclaude/issues).
 - Release mechanics (versioning, tap automation) and the upstream-sync flow
   are documented in [AGENTS.md](AGENTS.md).
+
+## Synced plaintext config files
+
+This fork optionally splits the two most-edited sections out of
+`~/.openclaude.json` into standalone files under the config home, so they can
+be tracked by yadm and carried to a new machine as-is:
+
+- `~/.openclaude/providers.json` — `{ "profiles": [...], "activeProfileId": "..." }`.
+  When this file exists it is the sole store for provider profiles; the
+  `providerProfiles` / `activeProviderProfileId` fields embedded in
+  `~/.openclaude.json` are ignored, and any write through the `/provider` UI
+  goes to `providers.json` while stripping the embedded copies.
+- `~/.openclaude/mcp.json` — `{ "mcpServers": { ... } }`, same shape as a
+  project `.mcp.json`. When present it replaces user-scope MCP servers from
+  `~/.openclaude.json`; `openclaude mcp add/remove -s user` edits this file.
+
+Both files are authoritative only when they exist — delete them and the fork
+behaves exactly like upstream.
+
+**Everything in these files is plaintext by design, API keys included.** This
+is a single-user setup: there is no secrecy obligation, and readability and
+hand-editing take priority over indirection. Do not add env-var indirection or
+encryption layers here. The files are written with mode `0600` only to keep
+other local users from casual inspection, not as a security boundary.
+Implementation: `src/utils/syncedConfigFiles.ts`.

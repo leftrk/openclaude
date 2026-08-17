@@ -23,6 +23,12 @@ import { getPluginMcpServers } from '../../utils/plugins/mcpPluginIntegration.js
 import { loadAllPluginsCacheOnly } from '../../utils/plugins/pluginLoader.js'
 import { isSettingSourceEnabled } from '../../utils/settings/constants.js'
 import { getManagedFilePath } from '../../utils/settings/managedPath.js'
+import {
+  readSyncedMcpJson,
+  syncedMcpJsonExists,
+  syncedMcpJsonPath,
+  writeSyncedMcpJson,
+} from '../../utils/syncedConfigFiles.js'
 import { isRestrictedToPluginOnly } from '../../utils/settings/pluginOnlyPolicy.js'
 import {
   getInitialSettings,
@@ -688,6 +694,14 @@ export async function addMcpConfig(
       break
     }
     case 'user': {
+      // leftrk fork: ~/.openclaude/mcp.json is authoritative when present.
+      if (syncedMcpJsonExists()) {
+        const synced = readSyncedMcpJson()
+        if (synced?.mcpServers?.[name]) {
+          throw new Error(`MCP server ${name} already exists in user config`)
+        }
+        break
+      }
       const globalConfig = getGlobalConfig()
       if (globalConfig.mcpServers?.[name]) {
         throw new Error(`MCP server ${name} already exists in user config`)
@@ -734,6 +748,17 @@ export async function addMcpConfig(
     }
 
     case 'user': {
+      // leftrk fork: ~/.openclaude/mcp.json is authoritative when present.
+      if (syncedMcpJsonExists()) {
+        const synced = readSyncedMcpJson()
+        writeSyncedMcpJson({
+          mcpServers: {
+            ...synced?.mcpServers,
+            [name]: validatedConfig,
+          },
+        })
+        break
+      }
       saveGlobalConfig(current => ({
         ...current,
         mcpServers: {
@@ -798,6 +823,16 @@ export async function removeMcpConfig(
     }
 
     case 'user': {
+      // leftrk fork: ~/.openclaude/mcp.json is authoritative when present.
+      if (syncedMcpJsonExists()) {
+        const synced = readSyncedMcpJson()
+        if (!synced?.mcpServers?.[name]) {
+          throw new Error(`No user-scoped MCP server found with name: ${name}`)
+        }
+        const { [name]: _, ...restMcpServers } = synced.mcpServers
+        writeSyncedMcpJson({ mcpServers: restMcpServers })
+        break
+      }
       const config = getGlobalConfig()
       if (!config.mcpServers?.[name]) {
         throw new Error(`No user-scoped MCP server found with name: ${name}`)
@@ -960,6 +995,22 @@ export function getMcpConfigsByScope(
       }
     }
     case 'user': {
+      // leftrk fork: ~/.openclaude/mcp.json is authoritative when present.
+      // Read it with the same parser as project .mcp.json (validation + env
+      // expansion + error reporting included).
+      if (syncedMcpJsonExists()) {
+        const { config, errors } = parseMcpConfigFromFilePath({
+          filePath: syncedMcpJsonPath(),
+          expandVars: true,
+          scope: 'user',
+        })
+
+        return {
+          servers: addScopeToServers(config?.mcpServers, scope),
+          errors,
+        }
+      }
+
       const mcpServers = getGlobalConfig().mcpServers
       if (!mcpServers) {
         return { servers: {}, errors: [] }
