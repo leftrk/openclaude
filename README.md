@@ -1,3 +1,5 @@
+> **Fork notice**: this is [leftrk/openclaude](https://github.com/leftrk/openclaude), an independent Homebrew distribution of [Gitlawb/openclaude](https://github.com/Gitlawb/openclaude) with additional fixes on top. Install with `brew install leftrk/tap/openclaude` — see [FORK.md](FORK.md).
+
 <div align="center">
   <img src="docs/assets/openclaude-wordmark.png" alt="OpenClaude — Open terminal for any LLM" width="830">
 

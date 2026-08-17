@@ -114,8 +114,9 @@ This fork tracks `upstream/main` (Gitlawb/openclaude) by **rebasing the fork sta
 - Sync cadence: every 1–2 weeks or after each upstream release, while the delta is small.
 - Procedure: `git fetch upstream` (GitHub may need the local SOCKS5 proxy: `git -c http.proxy=socks5h://127.0.0.1:1080 fetch upstream`), then `git rebase upstream/main`, then verify and `git push --force-with-lease origin main`.
 - `rerere` is enabled — keep it on; repeated conflict shapes resolve automatically.
-- Expected recurring conflicts: `package.json` / `.release-please-manifest.json` version lines on release commits (take the release commit's version), `README.md` (fork slimmed it to brew-only; keep the fork version), `AGENTS.md` (keep upstream bullets, keep fork sections appended at the end).
+- Expected recurring conflicts: `package.json` / `.release-please-manifest.json` version lines on release commits (take the release commit's version), `AGENTS.md` (keep upstream bullets, keep fork sections appended at the end).
+- `README.md` is upstream's file verbatim plus a single fork-notice blockquote at the very top — keep all fork edits confined to that blockquote. Fork-facing install docs live in `FORK.md`, which upstream does not have and therefore never conflicts.
 - Never move or re-point existing release tags — they were already consumed by the Homebrew tap. They will not be ancestors of rebased `main`; that is expected.
 - Watch out for resolutions that lived in old merge commits: a rebase drops merge commits, and any conflict resolution whose effect existed only in a merge tree silently disappears (this once dropped the tool-result semantic-boundary wiring in `requestPreparation.ts`). After each rebase, diff the new tree against the pre-rebase state and restore anything unintentionally lost.
 - After syncing, run `bun run typecheck` plus focused tests on files both sides touched (typically `src/utils/providerProfile*`, `src/integrations/runtimeMetadata*`, `src/integrations/aimlapi/`, `src/services/api/openaiShim*`).
-- Keep the fork delta small: PR generally useful fixes upstream instead of letting the local stack grow.
+- Keep the fork delta minimal: upstream rarely takes fork PRs, so prefer small, well-isolated patches over local rewrites — every commit in the stack is replayed on every sync.
