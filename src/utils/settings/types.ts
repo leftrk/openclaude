@@ -828,7 +828,7 @@ export const SettingsSchema = lazySchema(() =>
         .boolean()
         .optional()
         .describe(
-          'Whether to show sponsored partner tips alongside regular tips (default: true). Disabling does not affect regular tips.',
+          'Whether to show sponsored partner tips alongside regular tips (default: false; set true to opt in). Disabling does not affect regular tips.',
         ),
       sponsoredTipsFrequency: z
         .number()
