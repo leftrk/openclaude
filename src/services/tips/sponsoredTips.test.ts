@@ -57,8 +57,14 @@ function resetState(settings: StubSettings = {}, numStartups = 100) {
 }
 
 describe('sponsoredTipsEnabled', () => {
-  test('defaults to true when no settings present', async () => {
+  test('defaults to false when no settings present', async () => {
     resetState()
+    const { sponsoredTips } = await freshImport()
+    expect(sponsoredTips.sponsoredTipsEnabled()).toBe(false)
+  })
+
+  test('returns true when explicitly enabled', async () => {
+    resetState({ sponsoredTipsEnabled: true })
     const { sponsoredTips } = await freshImport()
     expect(sponsoredTips.sponsoredTipsEnabled()).toBe(true)
   })

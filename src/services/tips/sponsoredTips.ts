@@ -7,7 +7,8 @@ const DEFAULT_FREQUENCY = 10
 
 export function sponsoredTipsEnabled(): boolean {
   const settings = getSettings_DEPRECATED()
-  if (settings.sponsoredTipsEnabled === false) return false
+  // leftrk fork: sponsored tips are opt-in rather than on-by-default.
+  if (settings.sponsoredTipsEnabled !== true) return false
   if (settings.sponsoredTipsFrequency === 0) return false
   return true
 }
