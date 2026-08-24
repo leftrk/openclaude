@@ -297,8 +297,11 @@ export async function* withRetry<T>(
       return await operation(client, attempt, retryContext)
     } catch (error) {
       lastError = error
+      // Deliberately not gated on `error instanceof APIUserAbortError`:
+      // OpenAI-compatible routes rethrow the raw abort reason (often a plain
+      // string like 'agent-summary-superseded', see preserveCallerAbortError),
+      // so an expected side-task abort can surface as a non-Error value.
       if (
-        error instanceof APIUserAbortError &&
         options.signal?.aborted &&
         isExpectedSideTaskAbortReason(options.signal.reason)
       ) {

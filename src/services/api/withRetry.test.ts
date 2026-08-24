@@ -250,6 +250,59 @@ describe('abort retry classification', () => {
     ).toBe(true)
   })
 
+  test('does not retry or error-log side task aborts thrown as raw abort reason', async () => {
+    const debugLog = mock(
+      (_message: string, _options?: { level?: string }) => {},
+    )
+    const { CannotRetryError, withRetry } = await importFreshWithRetryModule(
+      'firstParty',
+      { logForDebugging: debugLog },
+    )
+    const controller = new AbortController()
+    let attempts = 0
+
+    await expect(
+      drainAsyncGenerator(
+        withRetry(
+          async () => ({} as Anthropic),
+          async () => {
+            attempts++
+            // OpenAI-compatible routes rethrow the raw abort reason (a plain
+            // string), not APIUserAbortError — see preserveCallerAbortError.
+            controller.abort('agent-summary-superseded')
+            throw controller.signal.reason
+          },
+          {
+            maxRetries: 2,
+            model: 'test-model',
+            thinkingConfig: { type: 'disabled' },
+            signal: controller.signal,
+            querySource: 'agent_summary',
+          },
+        ),
+      ),
+    ).rejects.toBeInstanceOf(CannotRetryError)
+
+    expect(attempts).toBe(1)
+    expect(
+      debugLog.mock.calls.some(([message, options]) => {
+        return (
+          String(message).startsWith('API error (attempt') &&
+          (options as { level?: string } | undefined)?.level === 'error'
+        )
+      }),
+    ).toBe(false)
+    expect(
+      debugLog.mock.calls.some(([message, options]) => {
+        return (
+          String(message).includes('Expected side-task API abort') &&
+          String(message).includes('agent-summary-superseded') &&
+          (options as { level?: string } | undefined)?.level !== 'error'
+        )
+      }),
+    ).toBe(true)
+  })
+
   test('still logs and retries real retryable API errors', async () => {
     process.env.OPENCLAUDE_RETRY_DELAY_MS = '1'
     const debugLog = mock(
