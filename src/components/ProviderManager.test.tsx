@@ -136,6 +136,7 @@ const PRESET_ORDER = [
   'Anthropic',
   'Alibaba Coding Plan (China)',
   'Alibaba Coding Plan',
+  'ApiSmart',
   'Atlas Cloud',
   'Azure OpenAI',
   'Bankr',
@@ -4885,7 +4886,7 @@ test('ProviderManager first-run Codex OAuth switches the current session after l
 
   await waitForFrameOutput(
     mounted.getOutput,
-    frame => frame.includes('Set up provider') && frame.includes('Codex OAuth'),
+    frame => frame.includes('Set up provider'),
   )
 
   await navigateToPreset(mounted.stdin, 'Codex OAuth')
@@ -4956,7 +4957,7 @@ test('ProviderManager Codex OAuth waiting state masks the paste field and delega
 
   await waitForFrameOutput(
     mounted.getOutput,
-    frame => frame.includes('Set up provider') && frame.includes('Codex OAuth'),
+    frame => frame.includes('Set up provider'),
   )
 
   await navigateToPreset(mounted.stdin, 'Codex OAuth')
@@ -5025,10 +5026,10 @@ test('ProviderManager Codex OAuth waiting state shows the SSH banner and surface
       onDone,
     })
 
-    await waitForFrameOutput(
-      mounted.getOutput,
-      frame =>
-        frame.includes('Set up provider') && frame.includes('Codex OAuth'),
+    // 'Codex OAuth' sits just past the select's visible window, so only wait
+    // for the preset screen header here; navigation scrolls it into view.
+    await waitForFrameOutput(mounted.getOutput, frame =>
+      frame.includes('Set up provider'),
     )
 
     await navigateToPreset(mounted.stdin, 'Codex OAuth')
@@ -5126,7 +5127,7 @@ test('ProviderManager first-run Codex OAuth surfaces credential storage warnings
 
   await waitForFrameOutput(
     mounted.getOutput,
-    frame => frame.includes('Set up provider') && frame.includes('Codex OAuth'),
+    frame => frame.includes('Set up provider'),
   )
 
   await navigateToPreset(mounted.stdin, 'Codex OAuth')
@@ -5216,7 +5217,7 @@ test('ProviderManager first-run Codex OAuth reports next-startup fallback when s
 
   await waitForFrameOutput(
     mounted.getOutput,
-    frame => frame.includes('Set up provider') && frame.includes('Codex OAuth'),
+    frame => frame.includes('Set up provider'),
   )
 
   await navigateToPreset(mounted.stdin, 'Codex OAuth')
@@ -5322,7 +5323,7 @@ test('ProviderManager does not hijack a manual Codex profile when OAuth credenti
 
   await waitForFrameOutput(
     mounted.getOutput,
-    frame => frame.includes('Set up provider') && frame.includes('Codex OAuth'),
+    frame => frame.includes('Set up provider'),
   )
 
   await navigateToPreset(mounted.stdin, 'Codex OAuth')
