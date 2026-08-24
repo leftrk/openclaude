@@ -1,6 +1,6 @@
 {
   "name": "@gitlawb/openclaude",
-  "version": "29.1.0",
+  "version": "29.2.0",
   "description": "OpenClaude opens coding-agent workflows to any LLM — OpenAI, Gemini, DeepSeek, Ollama, and 200+ models",
   "type": "module",
   "bin": {
